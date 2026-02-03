@@ -536,21 +536,24 @@
                 // Calculate empty space above disks
                 const emptyLines = maxHeight - disks.length - 1;
 
+                const halfWidth = gameState.diskCount + 1;
+
                 // Add empty pole lines at top
                 for (let j = 0; j < emptyLines; j++) {
-                    lines.push('    |    ');
+                    lines.push(' '.repeat(halfWidth) + '|' + ' '.repeat(halfWidth));
                 }
 
                 // Render disks from top to bottom (smallest to largest in visual order)
                 for (let j = disks.length - 1; j >= 0; j--) {
                     const diskSize = disks[j];
-                    const diskString = '█'.repeat(diskSize * 2 + 1);
-                    const padding = ' '.repeat(gameState.diskCount - diskSize);
+                    const inner = '='.repeat(diskSize * 2 - 1);
+                    const diskString = '[' + inner + ']';
+                    const padding = ' '.repeat(halfWidth - diskSize);
                     lines.push(padding + diskString + padding);
                 }
 
-                // Add base with different character
-                const baseChars = '▬'.repeat(gameState.diskCount * 2 + 3);
+                // Add base
+                const baseChars = '='.repeat(halfWidth * 2 + 1);
                 lines.push(baseChars);
 
                 asciiContainer.textContent = lines.join('\n');
