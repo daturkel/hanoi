@@ -42,7 +42,7 @@
             display: flex;
             gap: 60px;
             margin-bottom: 25px;
-            min-height: 400px;
+            align-items: flex-end;
         }
 
         .tower {
@@ -358,21 +358,21 @@
             const lines = [];
 
             // Header
-            lines.push('┌───────┬───────────┬───────────┬────────────┐');
-            lines.push('│ DISKS │ MIN MOVES │ YOUR BEST │    TIME    │');
-            lines.push('├───────┼───────────┼───────────┼────────────┤');
+            lines.push('┌───────┬─────────┬─────────┐');
+            lines.push('│ DISKS │  MOVES  │  SPEED  │');
+            lines.push('├───────┼─────────┼─────────┤');
 
             // Rows for disk counts 3-10
             for (let diskCount = 3; diskCount <= 10; diskCount++) {
                 const minMoves = getMinimalMoves(diskCount);
                 const score = scores[String(diskCount)];
 
-                let bestMoves = '--';
-                let bestTime = '--';
+                let bestMoves = '-';
+                let bestTime = '-';
                 let rowClass = '';
 
                 if (score) {
-                    bestMoves = String(score.moves).padStart(2, ' ');
+                    bestMoves = String(score.moves);
                     const minutes = String(Math.floor(score.time / 60)).padStart(2, '0');
                     const seconds = String(score.time % 60).padStart(2, '0');
                     bestTime = `${minutes}:${seconds}`;
@@ -383,12 +383,30 @@
                     }
                 }
 
-                const diskStr = String(diskCount).padStart(3, ' ');
-                const minStr = String(minMoves).padStart(5, ' ');
-                const bestStr = String(bestMoves).padStart(5, ' ');
-                const timeStr = String(bestTime).padStart(6, ' ');
+                // Center text within a fixed width
+                function center(text, width) {
+                    const str = String(text);
+                    const pad = width - str.length;
+                    const left = Math.floor(pad / 2);
+                    const right = pad - left;
+                    return ' '.repeat(left) + str + ' '.repeat(right);
+                }
 
-                let row = `│  ${diskStr}  │   ${minStr}   │   ${bestStr}   │   ${timeStr}   │`;
+                // Add * for perfect scores, space for non-perfect to keep alignment
+                let movesDisplay = bestMoves;
+                if (score) {
+                    movesDisplay = score.moves === minMoves ? bestMoves + '*' : bestMoves + ' ';
+                }
+
+                // Right-align moves within column
+                function rpad(text, width) {
+                    const str = String(text);
+                    return ' '.repeat(width - str.length - 2) + str + '  ';
+                }
+
+                const movesCol = score ? rpad(movesDisplay, 9) : center(movesDisplay, 9);
+                const timeCol = center(bestTime, 9);
+                let row = `│${center(diskCount, 7)}│${movesCol}│${timeCol}│`;
 
                 if (rowClass) {
                     // Mark perfect scores with special indicator
@@ -399,7 +417,8 @@
             }
 
             // Footer
-            lines.push('└───────┴───────────┴───────────┴────────────┘');
+            lines.push('└───────┴─────────┴─────────┘');
+            lines.push('              * = perfect');
 
             container.innerHTML = lines.join('\n');
         }
