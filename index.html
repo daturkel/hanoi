@@ -161,6 +161,53 @@
             opacity: 0.7;
             max-width: 600px;
         }
+
+        .high-score-section {
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .high-score-header {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+
+        .high-score-board {
+            display: inline-block;
+            text-align: left;
+            font-size: 0.75em;
+            line-height: 1.3;
+            text-shadow: 0 0 5px #00ff00;
+            padding: 10px;
+            background-color: rgba(0, 255, 0, 0.02);
+            border-radius: 4px;
+            margin: 0;
+        }
+
+        .high-score-board.hidden {
+            display: none;
+        }
+
+        .high-score-board .perfect-score {
+            color: #00ffff;
+            text-shadow: 0 0 8px #00ffff;
+        }
+
+        .message.record {
+            color: #ffff00;
+            text-shadow: 0 0 10px #ffff00;
+            font-weight: bold;
+        }
+
+        .message.perfect {
+            color: #00ffff;
+            text-shadow: 0 0 15px #00ffff, 0 0 25px #00ffff;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -206,10 +253,19 @@
         <button id="newGameBtn">New Game</button>
     </div>
 
+    <div class="high-score-section">
+        <div class="high-score-header">
+            <span>HIGH SCORES</span>
+            <button id="toggleScoresBtn" class="small">Hide [H]</button>
+            <button id="clearScoresBtn" class="small">Clear</button>
+        </div>
+        <pre id="highScoreBoard" class="high-score-board"></pre>
+    </div>
+
     <div class="instructions">
         Move all disks from Tower 1 to Tower 3.<br>
         Only smaller disks can be placed on larger disks.<br>
-        Press 'N' for new game • '+/-' to change disk count
+        Press 'N' for new game • '+/-' to change disk count • 'H' to toggle high scores
     </div>
 
     <script>
@@ -226,6 +282,188 @@
 
         // Selected disk count for next game (separate from current game)
         let selectedDiskCount = 5;
+
+        // Load high scores from localStorage
+        function loadHighScores() {
+            try {
+                const stored = localStorage.getItem('hanoi_highscores');
+                return stored ? JSON.parse(stored) : {};
+            } catch (e) {
+                // localStorage disabled or data corrupted
+                console.warn('Could not load high scores:', e);
+                return {};
+            }
+        }
+
+        // Save high scores to localStorage
+        function saveHighScores(scores) {
+            try {
+                localStorage.setItem('hanoi_highscores', JSON.stringify(scores));
+            } catch (e) {
+                // localStorage disabled or full
+                console.warn('Could not save high scores:', e);
+            }
+        }
+
+        // Get minimal possible moves for disk count
+        function getMinimalMoves(diskCount) {
+            return Math.pow(2, diskCount) - 1;
+        }
+
+        // Check if current game is a new record and save if so
+        // Returns: { type: 'none' | 'first' | 'moves' | 'time' | 'perfect', isPerfect: boolean }
+        function checkAndSaveHighScore(diskCount, moves, timeSeconds) {
+            const scores = loadHighScores();
+            const key = String(diskCount);
+            const minMoves = getMinimalMoves(diskCount);
+            const isPerfect = moves === minMoves;
+
+            let recordType = 'none';
+
+            if (!scores[key]) {
+                // First completion for this disk count
+                scores[key] = { moves: moves, time: timeSeconds, timestamp: Date.now() };
+                recordType = isPerfect ? 'perfect' : 'first';
+            } else {
+                // Better move count (primary metric)
+                if (moves < scores[key].moves) {
+                    scores[key].moves = moves;
+                    scores[key].time = timeSeconds;
+                    scores[key].timestamp = Date.now();
+                    recordType = isPerfect ? 'perfect' : 'moves';
+                }
+                // Same move count but better time (tiebreaker)
+                else if (moves === scores[key].moves && timeSeconds < scores[key].time) {
+                    scores[key].time = timeSeconds;
+                    scores[key].timestamp = Date.now();
+                    recordType = 'time';
+                }
+            }
+
+            if (recordType !== 'none') {
+                saveHighScores(scores);
+                renderHighScores();
+            }
+
+            return { type: recordType, isPerfect: isPerfect };
+        }
+
+        // Render high score board as ASCII table
+        function renderHighScores() {
+            const scores = loadHighScores();
+            const container = document.getElementById('highScoreBoard');
+
+            if (!container) return;
+
+            const lines = [];
+
+            // Header
+            lines.push('┌───────┬───────────┬───────────┬────────────┐');
+            lines.push('│ DISKS │ MIN MOVES │ YOUR BEST │    TIME    │');
+            lines.push('├───────┼───────────┼───────────┼────────────┤');
+
+            // Rows for disk counts 3-10
+            for (let diskCount = 3; diskCount <= 10; diskCount++) {
+                const minMoves = getMinimalMoves(diskCount);
+                const score = scores[String(diskCount)];
+
+                let bestMoves = '--';
+                let bestTime = '--';
+                let rowClass = '';
+
+                if (score) {
+                    bestMoves = String(score.moves).padStart(2, ' ');
+                    const minutes = String(Math.floor(score.time / 60)).padStart(2, '0');
+                    const seconds = String(score.time % 60).padStart(2, '0');
+                    bestTime = `${minutes}:${seconds}`;
+
+                    // Highlight perfect scores
+                    if (score.moves === minMoves) {
+                        rowClass = 'perfect-score';
+                    }
+                }
+
+                const diskStr = String(diskCount).padStart(3, ' ');
+                const minStr = String(minMoves).padStart(5, ' ');
+                const bestStr = String(bestMoves).padStart(5, ' ');
+                const timeStr = String(bestTime).padStart(6, ' ');
+
+                let row = `│  ${diskStr}  │   ${minStr}   │   ${bestStr}   │   ${timeStr}   │`;
+
+                if (rowClass) {
+                    // Mark perfect scores with special indicator
+                    row = `<span class="${rowClass}">${row}</span>`;
+                }
+
+                lines.push(row);
+            }
+
+            // Footer
+            lines.push('└───────┴───────────┴───────────┴────────────┘');
+
+            container.innerHTML = lines.join('\n');
+        }
+
+        // Clear all high scores (with confirmation)
+        function clearHighScores() {
+            if (confirm('Clear all high scores? This cannot be undone.')) {
+                try {
+                    localStorage.removeItem('hanoi_highscores');
+                    renderHighScores();
+                    showMessage('High scores cleared');
+                } catch (e) {
+                    console.warn('Could not clear high scores:', e);
+                }
+            }
+        }
+
+        // Toggle high score board visibility
+        function toggleHighScores() {
+            const board = document.getElementById('highScoreBoard');
+            const btn = document.getElementById('toggleScoresBtn');
+
+            if (!board || !btn) return;
+
+            if (board.classList.contains('hidden')) {
+                board.classList.remove('hidden');
+                btn.textContent = 'Hide [H]';
+                try {
+                    localStorage.setItem('hanoi_scores_visible', 'true');
+                } catch (e) {
+                    console.warn('Could not save visibility state:', e);
+                }
+            } else {
+                board.classList.add('hidden');
+                btn.textContent = 'Show [H]';
+                try {
+                    localStorage.setItem('hanoi_scores_visible', 'false');
+                } catch (e) {
+                    console.warn('Could not save visibility state:', e);
+                }
+            }
+        }
+
+        // Initialize high score board visibility from localStorage
+        function initHighScoreVisibility() {
+            const board = document.getElementById('highScoreBoard');
+            const btn = document.getElementById('toggleScoresBtn');
+
+            if (!board || !btn) return;
+
+            try {
+                const visible = localStorage.getItem('hanoi_scores_visible');
+                // Default to visible if not set
+                if (visible === 'false') {
+                    board.classList.add('hidden');
+                    btn.textContent = 'Show [H]';
+                } else {
+                    board.classList.remove('hidden');
+                    btn.textContent = 'Hide [H]';
+                }
+            } catch (e) {
+                console.warn('Could not load visibility state:', e);
+            }
+        }
 
         // Initialize game with specified number of disks
         function initGame(numDisks, syncSelectedCount = true) {
@@ -324,6 +562,12 @@
             }
             if (key === '-' || key === '_') {
                 decrementDiskCount();
+                return;
+            }
+
+            // Handle high score toggle
+            if (key === 'h' || key === 'H') {
+                toggleHighScores();
                 return;
             }
 
@@ -453,7 +697,33 @@
             const minutes = String(Math.floor(elapsedSeconds / 60)).padStart(2, '0');
             const seconds = String(elapsedSeconds % 60).padStart(2, '0');
 
-            showWinMessage(`YOU WIN! Time: ${minutes}:${seconds} | Moves: ${gameState.moveCount}`);
+            // Check and save high score
+            const result = checkAndSaveHighScore(gameState.diskCount, gameState.moveCount, elapsedSeconds);
+
+            // Build win message based on result
+            let message = `YOU WIN! Time: ${minutes}:${seconds} | Moves: ${gameState.moveCount}`;
+            let messageClass = 'win';
+
+            if (result.type === 'perfect') {
+                message += ' | PERFECT SCORE!';
+                messageClass = 'perfect';
+            } else if (result.type === 'moves') {
+                message += ' | NEW RECORD!';
+                messageClass = 'record';
+            } else if (result.type === 'time') {
+                message += ' | FASTER TIME!';
+                messageClass = 'record';
+            } else if (result.type === 'first') {
+                message += ' | FIRST COMPLETION!';
+                messageClass = 'record';
+            } else if (result.isPerfect) {
+                message += ' | PERFECT SCORE!';
+                messageClass = 'perfect';
+            }
+
+            const messageEl = document.getElementById('message');
+            messageEl.textContent = message;
+            messageEl.className = `message ${messageClass}`;
         }
 
         // Start the game timer
@@ -533,9 +803,13 @@
         document.getElementById('newGameBtn').addEventListener('click', startNewGame);
         document.getElementById('incrementBtn').addEventListener('click', incrementDiskCount);
         document.getElementById('decrementBtn').addEventListener('click', decrementDiskCount);
+        document.getElementById('toggleScoresBtn').addEventListener('click', toggleHighScores);
+        document.getElementById('clearScoresBtn').addEventListener('click', clearHighScores);
 
-        // Initialize game on page load
+        // Initialize game and high scores on page load
         initGame(5);
+        renderHighScores();
+        initHighScoreVisibility();
     </script>
 </body>
 </html>
