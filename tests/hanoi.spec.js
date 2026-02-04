@@ -27,7 +27,8 @@ test.describe('Towers of Hanoi Game', () => {
 
     // Check Tower 1 has ASCII art content (disks rendered)
     const tower1Content = await page.locator('[data-tower="0"] .ascii-tower').textContent();
-    expect(tower1Content).toContain('█');
+    expect(tower1Content).toContain('[');
+    expect(tower1Content).toContain(']');
 
     // Check Tower 2 and 3 have only pole and base (no disks)
     const tower2Content = await page.locator('[data-tower="1"] .ascii-tower').textContent();
@@ -35,8 +36,8 @@ test.describe('Towers of Hanoi Game', () => {
     expect(tower2Content).toContain('|');
     expect(tower3Content).toContain('|');
 
-    // Check initial message
-    await expect(page.locator('#message')).toContainText('Press 1, 2, or 3 to select a tower');
+    // Check initial message (now includes FJK keys)
+    await expect(page.locator('#message')).toContainText('Press 1/F, 2/J, or 3/K to select a tower');
   });
 
   test('keyboard controls work correctly', async ({ page }) => {
@@ -287,8 +288,9 @@ test.describe('Towers of Hanoi Game', () => {
     await page.keyboard.press('3');
 
     const tower3After = await page.locator('[data-tower="2"] .ascii-tower').textContent();
-    // Tower 3 should now have content
-    expect(tower3After).toContain('█');
+    // Tower 3 should now have content (disk brackets)
+    expect(tower3After).toContain('[');
+    expect(tower3After).toContain(']');
   });
 
   test('game prevents input after winning', async ({ page }) => {
@@ -349,10 +351,11 @@ test.describe('Towers of Hanoi Game', () => {
     }
     await page.locator('#newGameBtn').click();
 
-    // Verify 10-disk game loads
+    // Verify 10-disk game loads (disks use brackets)
     const tower1Content = await page.locator('[data-tower="0"] .ascii-tower').textContent();
-    expect(tower1Content).toContain('█');
-    expect(tower1Content).toContain('▬');
+    expect(tower1Content).toContain('[');
+    expect(tower1Content).toContain(']');
+    expect(tower1Content).toContain('=');
 
     // Verify we can make a move
     await page.keyboard.press('1');
@@ -364,9 +367,10 @@ test.describe('Towers of Hanoi Game', () => {
     // Start 5-disk game (default)
     const tower1Content = await page.locator('[data-tower="0"] .ascii-tower').textContent();
 
-    // Should contain disk character and base character
-    expect(tower1Content).toContain('█');
-    expect(tower1Content).toContain('▬');
+    // Should contain disk brackets and base (both use = but disks have brackets)
+    expect(tower1Content).toContain('[');
+    expect(tower1Content).toContain(']');
+    expect(tower1Content).toContain('=');
   });
 
   test('changing disk count with +/- buttons updates display', async ({ page }) => {
@@ -446,7 +450,7 @@ test.describe('Towers of Hanoi Game', () => {
 
     // Should cancel selection, no move should happen
     await expect(page.locator('#moveCounter')).toContainText('MOVES: 0');
-    await expect(page.locator('#message')).toContainText('Press 1, 2, or 3 to select a tower');
+    await expect(page.locator('#message')).toContainText('Press 1/F, 2/J, or 3/K to select a tower');
 
     // Tower state should be unchanged
     const tower1After = await page.locator('[data-tower="0"] .ascii-tower').textContent();
