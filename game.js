@@ -300,8 +300,13 @@ function applyTheme(themeId, save = true) {
 
     // Update theme selector if it exists
     const themeSelect = document.getElementById('themeSelect');
-    if (themeSelect && themeSelect.value !== themeId) {
-        themeSelect.value = themeId;
+    if (themeSelect) {
+        if (themeSelect.value !== themeId) {
+            themeSelect.value = themeId;
+        }
+        // Update dropdown arrow color
+        const arrowColor = encodeURIComponent(theme.colors.text);
+        themeSelect.style.backgroundImage = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='${arrowColor}' d='M2 4l4 4 4-4'/%3E%3C/svg%3E")`;
     }
 
     // Save preference
@@ -445,7 +450,7 @@ function renderHighScores() {
 
     // Footer
     lines.push(`${t.bottomLeft}${t.horizontal.repeat(7)}${t.tBottom}${t.horizontal.repeat(9)}${t.tBottom}${t.horizontal.repeat(9)}${t.bottomRight}`);
-    lines.push('              * = perfect');
+    lines.push('                  * = perfect');
 
     container.innerHTML = lines.join('\n');
 }
