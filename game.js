@@ -19,7 +19,6 @@ const CONFIG = {
 
 const THEMES = {
     green: {
-        name: 'Green Terminal',
         colors: {
             bg: '#0a0a0a',
             text: '#00ff00',
@@ -32,7 +31,6 @@ const THEMES = {
         ascii: 'classic'
     },
     amber: {
-        name: 'Amber Terminal',
         colors: {
             bg: '#0a0a0a',
             text: '#ffb000',
@@ -45,7 +43,6 @@ const THEMES = {
         ascii: 'classic'
     },
     blue: {
-        name: 'Blue Terminal',
         colors: {
             bg: '#0a0a0a',
             text: '#00bfff',
@@ -58,7 +55,6 @@ const THEMES = {
         ascii: 'classic'
     },
     minimal: {
-        name: 'Minimal',
         colors: {
             bg: '#1a1a1a',
             text: '#e0e0e0',
@@ -347,6 +343,25 @@ function getMinimalMoves(diskCount) {
     return Math.pow(2, diskCount) - 1;
 }
 
+function formatTime(totalSeconds) {
+    const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+    const seconds = String(totalSeconds % 60).padStart(2, '0');
+    return `${minutes}:${seconds}`;
+}
+
+function centerText(text, width) {
+    const str = String(text);
+    const pad = width - str.length;
+    const left = Math.floor(pad / 2);
+    const right = pad - left;
+    return ' '.repeat(left) + str + ' '.repeat(right);
+}
+
+function rightPadText(text, width) {
+    const str = String(text);
+    return ' '.repeat(width - str.length - 2) + str + '  ';
+}
+
 function checkAndSaveHighScore(diskCount, moves, timeSeconds) {
     const scores = loadHighScores();
     const key = String(diskCount);
@@ -405,21 +420,11 @@ function renderHighScores() {
 
         if (score) {
             bestMoves = String(score.moves);
-            const minutes = String(Math.floor(score.time / 60)).padStart(2, '0');
-            const seconds = String(score.time % 60).padStart(2, '0');
-            bestTime = `${minutes}:${seconds}`;
+            bestTime = formatTime(score.time);
 
             if (score.moves === minMoves) {
                 rowClass = 'perfect-score';
             }
-        }
-
-        function center(text, width) {
-            const str = String(text);
-            const pad = width - str.length;
-            const left = Math.floor(pad / 2);
-            const right = pad - left;
-            return ' '.repeat(left) + str + ' '.repeat(right);
         }
 
         let movesDisplay = bestMoves;
@@ -427,14 +432,9 @@ function renderHighScores() {
             movesDisplay = score.moves === minMoves ? bestMoves + '*' : bestMoves + ' ';
         }
 
-        function rpad(text, width) {
-            const str = String(text);
-            return ' '.repeat(width - str.length - 2) + str + '  ';
-        }
-
-        const movesCol = score ? rpad(movesDisplay, 9) : center(movesDisplay, 9);
-        const timeCol = center(bestTime, 9);
-        let row = `${t.vertical}${center(diskCount, 7)}${t.vertical}${movesCol}${t.vertical}${timeCol}${t.vertical}`;
+        const movesCol = score ? rightPadText(movesDisplay, 9) : centerText(movesDisplay, 9);
+        const timeCol = centerText(bestTime, 9);
+        let row = `${t.vertical}${centerText(diskCount, 7)}${t.vertical}${movesCol}${t.vertical}${timeCol}${t.vertical}`;
 
         if (rowClass) {
             row = `<span class="${rowClass}">${row}</span>`;
@@ -715,12 +715,9 @@ function handleWin() {
     }
 
     const elapsedSeconds = Math.floor((Date.now() - gameState.startTime) / 1000);
-    const minutes = String(Math.floor(elapsedSeconds / 60)).padStart(2, '0');
-    const seconds = String(elapsedSeconds % 60).padStart(2, '0');
-
     const result = checkAndSaveHighScore(gameState.diskCount, gameState.moveCount, elapsedSeconds);
 
-    let message = `YOU WIN! Time: ${minutes}:${seconds} | Moves: ${gameState.moveCount}`;
+    let message = `YOU WIN! Time: ${formatTime(elapsedSeconds)} | Moves: ${gameState.moveCount}`;
     let messageClass = 'win';
 
     if (result.type === 'perfect') {
@@ -755,16 +752,10 @@ function startTimer() {
 }
 
 function updateTimer() {
-    let elapsedSeconds = 0;
-
-    if (gameState.startTime) {
-        elapsedSeconds = Math.floor((Date.now() - gameState.startTime) / 1000);
-    }
-
-    const minutes = String(Math.floor(elapsedSeconds / 60)).padStart(2, '0');
-    const seconds = String(elapsedSeconds % 60).padStart(2, '0');
-
-    document.getElementById('timer').textContent = `TIME: ${minutes}:${seconds}`;
+    const elapsedSeconds = gameState.startTime
+        ? Math.floor((Date.now() - gameState.startTime) / 1000)
+        : 0;
+    document.getElementById('timer').textContent = `TIME: ${formatTime(elapsedSeconds)}`;
 }
 
 function updateMoveCounter() {
