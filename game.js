@@ -9,7 +9,8 @@ const CONFIG = {
     STORAGE_KEYS: {
         HIGH_SCORES: 'hanoi_highscores',
         SCORES_VISIBLE: 'hanoi_scores_visible',
-        THEME: 'hanoi_theme'
+        THEME: 'hanoi_theme',
+        DISK_COUNT: 'hanoi_disk_count'
     }
 };
 
@@ -278,6 +279,236 @@ function mergeHighScores(importedScores) {
 }
 
 // ============================================
+// GLOBAL LEADERBOARD (FIREBASE)
+// ============================================
+
+const LEADERBOARD_SIZE = 10;
+
+async function fetchGlobalLeaderboard(diskCount) {
+    if (!window.firebaseDb) {
+        console.warn('Firebase not initialized');
+        return [];
+    }
+
+    try {
+        const dbRef = window.firebaseRef(window.firebaseDb, `leaderboard/${diskCount}`);
+        const snapshot = await window.firebaseGet(dbRef);
+
+        if (snapshot.exists()) {
+            const data = snapshot.val();
+            // Convert object to array and sort
+            const scores = Object.values(data);
+            scores.sort((a, b) => {
+                if (a.moves !== b.moves) return a.moves - b.moves;
+                return a.time - b.time;
+            });
+            return scores.slice(0, LEADERBOARD_SIZE);
+        }
+        return [];
+    } catch (e) {
+        console.error('Error fetching leaderboard:', e);
+        return [];
+    }
+}
+
+function sanitizeName(name) {
+    // Only allow alphanumeric characters, convert to uppercase, max 3 chars
+    return name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 3);
+}
+
+function validateLeaderboardSubmission(diskCount, moves, time) {
+    // Validate disk count is in valid range
+    if (!Number.isInteger(diskCount) || diskCount < CONFIG.MIN_DISKS || diskCount > CONFIG.MAX_DISKS) {
+        return { valid: false, reason: 'Invalid disk count' };
+    }
+
+    // Validate moves is at least the minimum possible
+    const minMoves = getMinimalMoves(diskCount);
+    if (!Number.isInteger(moves) || moves < minMoves) {
+        return { valid: false, reason: 'Invalid move count' };
+    }
+
+    // Validate time is a positive integer (reasonable upper bound: 24 hours)
+    if (!Number.isInteger(time) || time < 0 || time > 86400) {
+        return { valid: false, reason: 'Invalid time' };
+    }
+
+    return { valid: true };
+}
+
+async function checkLeaderboardQualification(diskCount, moves, time) {
+    // Validate inputs before checking qualification
+    const validation = validateLeaderboardSubmission(diskCount, moves, time);
+    if (!validation.valid) {
+        return { qualifies: false, rank: null };
+    }
+
+    const leaderboard = await fetchGlobalLeaderboard(diskCount);
+
+    if (leaderboard.length < LEADERBOARD_SIZE) {
+        return { qualifies: true, rank: leaderboard.length + 1 };
+    }
+
+    // Check if better than worst score
+    const worst = leaderboard[leaderboard.length - 1];
+    if (moves < worst.moves || (moves === worst.moves && time < worst.time)) {
+        // Find actual rank
+        let rank = 1;
+        for (const score of leaderboard) {
+            if (moves < score.moves || (moves === score.moves && time < score.time)) {
+                break;
+            }
+            rank++;
+        }
+        return { qualifies: true, rank };
+    }
+
+    return { qualifies: false, rank: null };
+}
+
+async function submitToLeaderboard(diskCount, name, moves, time) {
+    if (!window.firebaseDb) {
+        console.warn('Firebase not initialized');
+        return false;
+    }
+
+    // Validate inputs
+    const validation = validateLeaderboardSubmission(diskCount, moves, time);
+    if (!validation.valid) {
+        console.warn('Leaderboard submission rejected:', validation.reason);
+        return false;
+    }
+
+    // Sanitize name
+    const sanitizedName = sanitizeName(name);
+    if (sanitizedName.length === 0) {
+        console.warn('Leaderboard submission rejected: Empty name after sanitization');
+        return false;
+    }
+
+    try {
+        // Fetch current leaderboard
+        const leaderboard = await fetchGlobalLeaderboard(diskCount);
+
+        // Add new score
+        const newScore = {
+            name: sanitizedName,
+            moves,
+            time,
+            timestamp: Date.now()
+        };
+
+        leaderboard.push(newScore);
+
+        // Sort and trim to top 10
+        leaderboard.sort((a, b) => {
+            if (a.moves !== b.moves) return a.moves - b.moves;
+            return a.time - b.time;
+        });
+
+        const trimmed = leaderboard.slice(0, LEADERBOARD_SIZE);
+
+        // Save back to Firebase
+        const dbRef = window.firebaseRef(window.firebaseDb, `leaderboard/${diskCount}`);
+        await window.firebaseSet(dbRef, trimmed);
+
+        return true;
+    } catch (e) {
+        console.error('Error submitting to leaderboard:', e);
+        return false;
+    }
+}
+
+async function renderGlobalLeaderboard() {
+    const container = document.getElementById('globalLeaderboard');
+    const diskCountLabel = document.getElementById('globalDiskCount');
+    if (!container) return;
+
+    const diskCount = gameState.diskCount || CONFIG.DEFAULT_DISKS;
+    if (diskCountLabel) {
+        diskCountLabel.textContent = diskCount;
+    }
+
+    const t = currentAsciiSet.table;
+    const scores = await fetchGlobalLeaderboard(diskCount);
+
+    const lines = [];
+
+    // Header
+    lines.push(`${t.topLeft}${t.horizontal.repeat(3)}${t.tTop}${t.horizontal.repeat(6)}${t.tTop}${t.horizontal.repeat(7)}${t.tTop}${t.horizontal.repeat(7)}${t.topRight}`);
+    lines.push(`${t.vertical} # ${t.vertical} NAME ${t.vertical} MOVES ${t.vertical} SPEED ${t.vertical}`);
+    lines.push(`${t.tLeft}${t.horizontal.repeat(3)}${t.cross}${t.horizontal.repeat(6)}${t.cross}${t.horizontal.repeat(7)}${t.cross}${t.horizontal.repeat(7)}${t.tRight}`);
+
+    // Rows
+    if (scores.length === 0) {
+        lines.push(`${t.vertical}   ${t.vertical}      ${t.vertical}   -   ${t.vertical}   -   ${t.vertical}`);
+    } else {
+        for (let i = 0; i < scores.length; i++) {
+            const score = scores[i];
+            const rank = String(i + 1).padStart(2, ' ');
+            const name = ' ' + score.name.padEnd(4, ' ');
+            const moves = centerText(String(score.moves), 7);
+            const time = centerText(formatTime(score.time), 7);
+            lines.push(`${t.vertical}${rank} ${t.vertical}${name} ${t.vertical}${moves}${t.vertical}${time}${t.vertical}`);
+        }
+    }
+
+    // Fill empty rows
+    for (let i = scores.length; i < LEADERBOARD_SIZE && scores.length > 0; i++) {
+        lines.push(`${t.vertical}   ${t.vertical}      ${t.vertical}   -   ${t.vertical}   -   ${t.vertical}`);
+    }
+
+    // Footer
+    lines.push(`${t.bottomLeft}${t.horizontal.repeat(3)}${t.tBottom}${t.horizontal.repeat(6)}${t.tBottom}${t.horizontal.repeat(7)}${t.tBottom}${t.horizontal.repeat(7)}${t.bottomRight}`);
+
+    container.innerHTML = lines.join('\n');
+}
+
+function showNameModal(diskCount, moves, time) {
+    const modal = document.getElementById('nameModal');
+    const input = document.getElementById('nameInput');
+    const submitBtn = document.getElementById('submitNameBtn');
+
+    modal.classList.remove('hidden');
+    input.value = '';
+    input.focus();
+
+    const handleSubmit = async () => {
+        const name = input.value.trim();
+        if (name.length === 0) {
+            input.focus();
+            return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting...';
+
+        const success = await submitToLeaderboard(diskCount, name, moves, time);
+
+        modal.classList.add('hidden');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit';
+
+        if (success) {
+            await renderGlobalLeaderboard();
+        }
+
+        // Clean up listeners
+        submitBtn.removeEventListener('click', handleSubmit);
+        input.removeEventListener('keypress', handleKeySubmit);
+    };
+
+    const handleKeySubmit = (e) => {
+        if (e.key === 'Enter') {
+            handleSubmit();
+        }
+    };
+
+    submitBtn.addEventListener('click', handleSubmit);
+    input.addEventListener('keypress', handleKeySubmit);
+}
+
+// ============================================
 // THEME FUNCTIONS
 // ============================================
 
@@ -321,6 +552,7 @@ function applyTheme(themeId, save = true) {
     // Re-render with new ASCII characters
     renderGame();
     renderHighScores();
+    renderGlobalLeaderboard();
 }
 
 function cycleTheme() {
@@ -468,22 +700,20 @@ function clearHighScores() {
 }
 
 function toggleHighScores() {
-    const board = document.getElementById('highScoreBoard');
+    const container = document.querySelector('.leaderboards-container');
     const btn = document.getElementById('toggleScoresBtn');
 
-    if (!board || !btn) return;
+    if (!container || !btn) return;
 
-    if (board.classList.contains('hidden')) {
-        board.classList.remove('hidden');
-        btn.textContent = 'Hide [H]';
+    if (container.classList.contains('hidden')) {
+        container.classList.remove('hidden');
         try {
             localStorage.setItem(CONFIG.STORAGE_KEYS.SCORES_VISIBLE, 'true');
         } catch (e) {
             console.warn('Could not save visibility state:', e);
         }
     } else {
-        board.classList.add('hidden');
-        btn.textContent = 'Show [H]';
+        container.classList.add('hidden');
         try {
             localStorage.setItem(CONFIG.STORAGE_KEYS.SCORES_VISIBLE, 'false');
         } catch (e) {
@@ -493,19 +723,15 @@ function toggleHighScores() {
 }
 
 function initHighScoreVisibility() {
-    const board = document.getElementById('highScoreBoard');
+    const container = document.querySelector('.leaderboards-container');
     const btn = document.getElementById('toggleScoresBtn');
 
-    if (!board || !btn) return;
+    if (!container || !btn) return;
 
     try {
         const visible = localStorage.getItem(CONFIG.STORAGE_KEYS.SCORES_VISIBLE);
         if (visible === 'false') {
-            board.classList.add('hidden');
-            btn.textContent = 'Show [H]';
-        } else {
-            board.classList.remove('hidden');
-            btn.textContent = 'Hide [H]';
+            container.classList.add('hidden');
         }
     } catch (e) {
         console.warn('Could not load visibility state:', e);
@@ -544,6 +770,7 @@ function initGame(numDisks, syncSelectedCount = true) {
     updateMoveCounter();
     updateTimer();
     showMessage('Press 1/F, 2/J, or 3/K to select a tower');
+    renderGlobalLeaderboard();
 }
 
 function renderGame() {
@@ -667,6 +894,11 @@ function handleKeyPress(event) {
     }
 }
 
+function clearSelection() {
+    gameState.selectedTower = null;
+    renderGame();
+}
+
 function isValidMove(fromTower, toTower) {
     const fromDisks = gameState.towers[fromTower];
     const toDisks = gameState.towers[toTower];
@@ -712,7 +944,7 @@ function checkWin() {
     return gameState.towers[2].length === gameState.diskCount;
 }
 
-function handleWin() {
+async function handleWin() {
     gameState.gameWon = true;
 
     if (gameState.timerInterval) {
@@ -746,6 +978,17 @@ function handleWin() {
     const messageEl = document.getElementById('message');
     messageEl.textContent = message;
     messageEl.className = `message ${messageClass}`;
+
+    // Check global leaderboard qualification
+    const qualification = await checkLeaderboardQualification(
+        gameState.diskCount,
+        gameState.moveCount,
+        elapsedSeconds
+    );
+
+    if (qualification.qualifies) {
+        showNameModal(gameState.diskCount, gameState.moveCount, elapsedSeconds);
+    }
 }
 
 // ============================================
@@ -792,6 +1035,7 @@ function incrementDiskCount() {
     if (selectedDiskCount < CONFIG.MAX_DISKS) {
         selectedDiskCount++;
         updateDiskCountDisplay();
+        saveDiskCount();
     }
 }
 
@@ -799,11 +1043,35 @@ function decrementDiskCount() {
     if (selectedDiskCount > CONFIG.MIN_DISKS) {
         selectedDiskCount--;
         updateDiskCountDisplay();
+        saveDiskCount();
     }
 }
 
 function updateDiskCountDisplay() {
     document.getElementById('diskCountDisplay').textContent = selectedDiskCount;
+}
+
+function saveDiskCount() {
+    try {
+        localStorage.setItem(CONFIG.STORAGE_KEYS.DISK_COUNT, selectedDiskCount.toString());
+    } catch (e) {
+        console.warn('Could not save disk count:', e);
+    }
+}
+
+function loadSavedDiskCount() {
+    try {
+        const saved = localStorage.getItem(CONFIG.STORAGE_KEYS.DISK_COUNT);
+        if (saved) {
+            const count = parseInt(saved, 10);
+            if (count >= CONFIG.MIN_DISKS && count <= CONFIG.MAX_DISKS) {
+                return count;
+            }
+        }
+    } catch (e) {
+        console.warn('Could not load disk count:', e);
+    }
+    return CONFIG.DEFAULT_DISKS;
 }
 
 function startNewGame() {
@@ -814,9 +1082,18 @@ function startNewGame() {
 // INITIALIZATION
 // ============================================
 
+function handleKeyDown(event) {
+    // Handle Escape key to deselect tower
+    if (event.key === 'Escape' && gameState.selectedTower !== null) {
+        clearSelection();
+        showMessage('Press 1/F, 2/J, or 3/K to select a tower');
+    }
+}
+
 function init() {
     // Event listeners
     document.addEventListener('keypress', handleKeyPress);
+    document.addEventListener('keydown', handleKeyDown);
     document.getElementById('newGameBtn').addEventListener('click', startNewGame);
     document.getElementById('incrementBtn').addEventListener('click', incrementDiskCount);
     document.getElementById('decrementBtn').addEventListener('click', decrementDiskCount);
@@ -829,8 +1106,13 @@ function init() {
     // Initialize theme first (before rendering)
     loadSavedTheme();
 
+    // Load saved disk count
+    const savedDiskCount = loadSavedDiskCount();
+    selectedDiskCount = savedDiskCount;
+    updateDiskCountDisplay();
+
     // Initialize game
-    initGame(CONFIG.DEFAULT_DISKS);
+    initGame(savedDiskCount);
     renderHighScores();
     initHighScoreVisibility();
 }
