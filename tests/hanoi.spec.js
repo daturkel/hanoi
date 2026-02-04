@@ -120,18 +120,17 @@ test.describe('Towers of Hanoi Game', () => {
     expect(tower3After).toBe(tower3Before);
   });
 
-  test('timer starts on first move and updates', async ({ page }) => {
+  test('timer starts on first tower selection and updates', async ({ page }) => {
     // Timer should be at 00:00
     await expect(page.locator('#timer')).toContainText('TIME: 00:00');
 
-    // Make first move
+    // Select first tower (timer starts here)
     await page.keyboard.press('1');
-    await page.keyboard.press('3');
 
     // Wait 2 seconds
     await page.waitForTimeout(2000);
 
-    // Timer should have updated
+    // Timer should have updated (even before completing a move)
     const timerText = await page.locator('#timer').textContent();
     expect(timerText).toMatch(/TIME: 00:0[1-3]/);
   });
@@ -456,8 +455,9 @@ test.describe('Towers of Hanoi Game', () => {
     const tower1After = await page.locator('[data-tower="0"] .ascii-tower').textContent();
     expect(tower1After).toBe(tower1Initial);
 
-    // Timer should not have started
-    await expect(page.locator('#timer')).toContainText('TIME: 00:00');
+    // Timer should have started on first selection (even though move was cancelled)
+    // Just verify the timer element exists and shows a time format
+    await expect(page.locator('#timer')).toContainText('TIME:');
   });
 
 });

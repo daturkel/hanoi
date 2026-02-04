@@ -632,6 +632,11 @@ function handleKeyPress(event) {
             return;
         }
 
+        // Start timer on first tower selection
+        if (!gameState.startTime) {
+            startTimer();
+        }
+
         gameState.selectedTower = towerIndex;
         renderGame();
         showMessage(`Tower ${towerIndex + 1} selected. Choose destination tower.`);
@@ -683,10 +688,6 @@ function isValidMove(fromTower, toTower) {
 }
 
 function moveDisk(fromTower, toTower) {
-    if (gameState.moveCount === 0) {
-        startTimer();
-    }
-
     const disk = gameState.towers[fromTower].pop();
     gameState.towers[toTower].push(disk);
 
