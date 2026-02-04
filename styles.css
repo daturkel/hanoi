@@ -207,6 +207,24 @@ select option {
     max-width: 700px;
 }
 
+.github-link {
+    margin-top: 20px;
+    font-size: 0.8em;
+}
+
+.github-link a {
+    color: var(--text-color);
+    text-decoration: none;
+    text-shadow: 0 0 3px var(--text-glow);
+    border-bottom: 1px solid var(--text-color);
+    padding-bottom: 2px;
+}
+
+.github-link a:hover {
+    text-shadow: 0 0 10px var(--text-glow);
+    border-bottom-width: 2px;
+}
+
 .high-score-section {
     margin: 20px 0;
     text-align: center;
