@@ -5,6 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Towers of Hanoi - Terminal Edition</title>
     <link rel="stylesheet" href="styles.css">
+    <script>
+        // Apply saved theme immediately to prevent flicker
+        // Note: Theme colors are duplicated from game.js THEMES object
+        (function() {
+            const savedTheme = localStorage.getItem('hanoi_theme');
+            if (savedTheme) {
+                const themes = {
+                    green: { bg: '#0a0a0a', text: '#00ff00', glow: '#00ff00', error: '#ff0000', win: '#ffff00', perfect: '#00ffff', bgTint: 'rgba(0, 255, 0, 0.02)' },
+                    amber: { bg: '#0a0a0a', text: '#ffb000', glow: '#ffb000', error: '#ff4444', win: '#ffffff', perfect: '#ffd700', bgTint: 'rgba(255, 176, 0, 0.02)' },
+                    blue: { bg: '#0a0a0a', text: '#00bfff', glow: '#00bfff', error: '#ff6b6b', win: '#ffd700', perfect: '#ff69b4', bgTint: 'rgba(0, 191, 255, 0.02)' },
+                    minimal: { bg: '#1a1a1a', text: '#e0e0e0', glow: '#888888', error: '#e74c3c', win: '#f1c40f', perfect: '#3498db', bgTint: 'rgba(224, 224, 224, 0.02)' }
+                };
+                const colors = themes[savedTheme];
+                if (colors) {
+                    const root = document.documentElement;
+                    root.style.setProperty('--bg-color', colors.bg);
+                    root.style.setProperty('--text-color', colors.text);
+                    root.style.setProperty('--text-glow', colors.glow);
+                    root.style.setProperty('--error-color', colors.error);
+                    root.style.setProperty('--win-color', colors.win);
+                    root.style.setProperty('--perfect-color', colors.perfect);
+                    root.style.setProperty('--bg-tint', colors.bgTint);
+                }
+            }
+        })();
+    </script>
 </head>
 <body>
     <h1>Towers of Hanoi</h1>
