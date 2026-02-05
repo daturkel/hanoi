@@ -813,6 +813,11 @@ function renderGame() {
 }
 
 function handleKeyPress(event) {
+    // Ignore keyboard shortcuts when typing in an input field
+    if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+        return;
+    }
+
     const key = event.key;
 
     // Handle new game key
